@@ -21,26 +21,27 @@ y teléfono.
 La plataforma no busca eludir el licenciamiento de SAP (decisión D-02). Se conecta al Service Layer
 con un usuario técnico de integración y lee HANA con un usuario de base de datos que solo tiene
 permiso de consulta. La versión de la empresa opera en producción con el modelo de licencias de
-acceso indirecto (D-25): cada usuario nuevo de la plataforma recibe su licencia antes de usarla. La
-lectura directa sobre HANA se mantiene sujeta a la validación escrita del partner de SAP (D-26,
-restricción X-04); si no la aprueba, las consultas de la API se reemplazan por lecturas del Service
-Layer sin cambiar las pantallas.
+acceso indirecto (decisión D-17): cada usuario nuevo de la plataforma recibe su licencia antes de
+usarla. La lectura directa sobre HANA se mantiene sujeta a la validación escrita del partner de SAP
+(D-17, restricción X-04, riesgo R-03); si no la aprueba, las consultas de la API se reemplazan por
+lecturas del Service Layer sin cambiar las pantallas.
 
 ### Despliegue y acceso remoto
 
-La plataforma corre **on-premise**, en un servidor de aplicaciones de la red interna de la empresa,
-junto a SAP Business One: el Service Layer y SAP HANA nunca se publican hacia internet y la
-plataforma los usa por la red interna (usuario técnico del Service Layer, D-25, y usuario de HANA
-solo de consulta, D-26). Para entrar desde fuera de la red se usa un **túnel de Cloudflare**
-(conector `cloudflared` como servicio, conexión solo saliente: sin puertos de entrada, sin IP
-pública ni VPN) protegido con **Cloudflare Access**, que exige la **cuenta corporativa de
-Microsoft 365** (Microsoft Entra ID) antes de llegar a la plataforma, que luego pide su propio
-inicio de sesión (doble capa, decisión D-29). Dentro de la red se entra por la dirección interna.
-La dependencia de Cloudflare para el acceso externo se registra como riesgo R-19. El detalle
-(topología, configuración de Django detrás del túnel y pasos de Cloudflare y Entra ID) está en la
-guía `docs/despliegue_on_premise.md` del repositorio del código. Las tablas de SAP que lee o escribe la
-plataforma, por Service Layer o por la API de consultas, se documentan en el **Mapa de tablas SAP -
-Service Layer y API**.
+La plataforma corre **on-premise** (en contenedores Docker o como servicio directo), en un servidor de aplicaciones de la red interna de
+la empresa, junto a SAP Business One: el Service Layer y SAP HANA nunca se publican hacia internet y
+la plataforma los usa por la red interna (usuario técnico del Service Layer y usuario de HANA solo
+de consulta, D-17). Para entrar desde fuera de la red se usa un **túnel de Cloudflare** (conector
+`cloudflared` como servicio, conexión solo saliente: sin puertos de entrada, sin IP pública ni VPN)
+protegido con **Cloudflare Access**, que exige la **cuenta corporativa de Microsoft 365** (Microsoft
+Entra ID) antes de llegar a la plataforma, que luego pide su propio inicio de sesión (doble capa,
+decisión D-17). Dentro de la red se entra por la dirección interna. La dependencia de Cloudflare
+para el acceso externo se registra en el riesgo R-18 (falla de correo, contenedores o acceso
+remoto). El correo sale por Microsoft 365 en producción y por Mailpit en la demostración (D-16). El
+detalle (topología, configuración de Django detrás del túnel y pasos de Cloudflare y Entra ID) está
+en la guía `docs/despliegue_on_premise.md` del repositorio del código. Las tablas de SAP que lee o
+escribe la plataforma, por Service Layer o por la API de consultas, se documentan en el **Mapa de
+tablas SAP - Service Layer y API**.
 
 ### Innovación y valor
 
@@ -57,45 +58,54 @@ Service Layer y API**.
 
 ## Metodología
 
-Scrum, con 6 sprints entre el 31-08-2026 y el 13-11-2026, más un Sprint 7 de extensión propuesto
-(16-11-2026 al 04-12-2026) para las solicitudes de cambio surgidas en la operación (decisión D-19), pendiente de
-aprobación del docente. El código de sus 12 historias se preparó el 10 y 11-11-2026 desde la versión en producción y se
-integra por etapas (18 a 40) durante el sprint (decisión D-24), junto con las funciones de la versión en producción
-agregadas tras validarla contra ella (D-27) y sus correcciones de integridad y seguridad (D-28). Las responsabilidades de Product Owner,
-Scrum Master y responsable de integración rotan en cada sprint (ver el Acuerdo de trabajo Scrum).
+Scrum, con 6 sprints entre el 31-08-2026 y el 13-11-2026: los Sprints 1 a 5 de dos semanas y el
+Sprint 6 (09-11-2026 al 13-11-2026) de una semana. Las necesidades surgidas en la operación
+(HU-021 a HU-035, 15 historias y 51 SP) se incorporaron al Product Backlog como alcance emergente
+por refinamiento (decisión D-14), sin extender los Sprints 5 y 6: el Sprint 5 cerró con 10
+historias (47 SP) y el Sprint 6 con 9 historias (36 SP). Junto con ellas se registraron las
+decisiones de integridad y seguridad comercial (D-15), correo y documentos (D-16), infraestructura y
+licencias (D-17) y catálogo de consultas de solo lectura (D-18). El proyecto cierra con 35 historias
+y 196 SP terminados y aceptados por el Product Owner, 123 casos de prueba aprobados (CP-001 a
+CP-123) y la versión final v0.6.0 del producto (1.951 pruebas automatizadas de la plataforma y 246
+de la API de consultas, sin fallas). Las responsabilidades de Product Owner, Scrum Master y
+responsable de integración rotan en cada sprint (ver el Acuerdo de trabajo Scrum).
 
 ## Estructura
 
 | Carpeta | Contenido |
 |---|---|
 | `Fase_1/` | Definición del proyecto (Guía 1.5), presentación y evidencias individuales. |
-| `Fase_2/Evidencias Proyecto/Mati/` | Producto, interesados y gestión del proyecto. |
-| `Fase_2/Evidencias Proyecto/Milla/` | Scrum, sprints, calidad y pruebas. |
-| `Fase_2/Evidencias Proyecto/Ale/` | Requisitos, arquitectura e integración con SAP. |
-| `Fase_2/Evidencias_Grupales/`, `Fase_2/Evidencias_Individuales/` | Guías de la fase y diarios de reflexión. |
+| `Fase_2/Evidencias Proyecto/` | Todos los documentos del proyecto (producto, gestión, Scrum, pruebas, requisitos, arquitectura e integración con SAP), en una sola carpeta. El índice siguiente los agrupa por responsable. |
+| `Fase_2/Evidencias_Grupales/`, `Fase_2/Evidencias_Individuales/` | Guías e informe de avance de la fase y diarios de reflexión. |
 | `Fase_3/` | Evidencias de la fase de cierre. |
 
 ## Índice de documentos
 
-**Mati:** Carta de constitución del proyecto · Registro de interesados · Matriz RACI · Matriz de
-comunicaciones · Registro de riesgos, decisiones y restricciones · Product Vision y Product Goal ·
-Alcance funcional detallado · Catálogo de procesos AS-IS y TO-BE · Product Backlog · Matriz de
-trazabilidad · Manual de usuario · Acta de cierre y aceptación.
+Todos están en `Fase_2/Evidencias Proyecto/`.
 
-**Milla:** Acuerdo de trabajo Scrum · Definition of Done · Sprint 1 a Sprint 7 (Sprint Backlog,
-Review y Retrospectiva; el Sprint 7 es una extensión propuesta) · Carta Gantt de sprints · Pruebas - Estrategia de pruebas · Pruebas -
-Informe final · Prototipos y diseño de interfaces.
+**Matías Orellana (producto, interesados y gestión del proyecto):** Carta de constitución del
+proyecto · Registro de interesados · Matriz RACI · Matriz de comunicaciones · Registro de riesgos,
+decisiones y restricciones · Product Vision y Product Goal · Alcance funcional detallado · Catálogo
+de procesos AS-IS y TO-BE · Product Backlog · Matriz de trazabilidad · Manual de usuario · Acta de
+cierre y aceptación.
 
-**Ale:** SRS - Especificación de requisitos · Requisitos no funcionales · Arquitectura ·
-Arquitectura - 4+1 · Diagramas UML · Modelo de datos · Modelo de datos y arquitectura actualizados ·
-Especificación de integración y API · Especificación final de integración con SAP Business One ·
-Mapa de tablas SAP - Service Layer y API (tablas y campos de SAP que usa la plataforma y por qué vía) ·
-Informe de seguridad, roles y control de accesos · Manual técnico · Colección Postman-Bruno.
+**Millaray Espósito (Scrum, sprints, calidad y pruebas):** Acuerdo de trabajo Scrum · Definition of
+Done · Sprint 1 a Sprint 6 - Sprint Backlog, Review y Retrospectiva (un expediente por sprint) ·
+Carta Gantt de sprints · Pruebas - Estrategia de pruebas · Pruebas - Informe final · Prototipos y
+diseño de interfaces.
+
+**Alexssander López (requisitos, arquitectura e integración con SAP):** SRS - Especificación de
+requisitos · Requisitos no funcionales · Arquitectura · Arquitectura - 4+1 · Diagramas UML · Modelo
+de datos · Modelo de datos y arquitectura actualizados · Especificación de integración y API ·
+Especificación final de integración con SAP Business One · Mapa de tablas SAP - Service Layer y API
+(tablas y campos de SAP que usa la plataforma y por qué vía) · Informe de seguridad, roles y control
+de accesos · Manual técnico · Colección Postman-Bruno (carpeta `Coleccion Postman-Bruno/`, con su
+`LEEME.md`).
 
 ## Tecnologías
 
 Python 3.12 · Django 5.2 · FastAPI · SAP Business One Service Layer · SAP HANA · PostgreSQL ·
-Bootstrap 5 · Docker · Cloudflare Tunnel y Cloudflare Access con Microsoft Entra ID (acceso remoto) ·
-Windows Server 2016.
+Bootstrap 5 · Docker · Mailpit (correo de demostración) · Cloudflare Tunnel y Cloudflare Access con
+Microsoft Entra ID (acceso remoto) · Windows Server 2016.
 
 > Todos los datos de ejemplo, capturas y usuarios de demostración son ficticios.
