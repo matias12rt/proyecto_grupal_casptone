@@ -1,0 +1,2030 @@
+{
+  "info": {
+    "_postman_id": "03f4951d-ed70-4dc8-9172-bade4c01365b",
+    "name": "Proy-Capstone · Integración SAP B1",
+    "description": "Colección de pruebas de la integración de la Plataforma de Gestión con SAP Business One.\n\n- **SAP B1 Service Layer**: login, maestros, creación de artículos, cotizaciones, órdenes de venta, solicitudes de compra y trazabilidad. Ejecutar contra las **bases Test** (refrescadas cada lunes).\n- **API de consultas (api2)**: productos, stock, clientes, comisiones y documentos para posventa, con firma HMAC automática.\n\nImportable en Postman y en Bruno (Importar → Postman Collection). Seleccionar el entorno correspondiente.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "SAP B1 Service Layer (bases Test)",
+      "description": "Peticiones al Service Layer de SAP Business One. Usar SIEMPRE el entorno 'SAP Test': las bases Test se refrescan cada lunes desde producción; la base productiva no se toca. Ejecutar primero '01 Login'.",
+      "item": [
+        {
+          "name": "01 Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{sl_url}}/Login",
+              "host": [
+                "{{sl_url}}"
+              ],
+              "path": [
+                "Login"
+              ]
+            },
+            "description": "Inicia sesión en el Service Layer con la base Test. Guarda B1SESSION para el resto de las peticiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"CompanyDB\": \"{{company_db}}\",\n  \"UserName\": \"{{sap_user}}\",\n  \"Password\": \"{{sap_pass}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const j = pm.response.json();",
+                  "pm.test('Entrega SessionId', () => pm.expect(j.SessionId).to.be.a('string'));",
+                  "pm.collectionVariables.set('session_id', j.SessionId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Metadatos OData ($metadata)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{sl_url}}/$metadata",
+              "host": [
+                "{{sl_url}}"
+              ],
+              "path": [
+                "$metadata"
+              ]
+            },
+            "description": "Definición oficial de entidades y campos (incluye los UDF) de la instalación."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "pm.test('Es XML de metadatos', () => pm.expect(pm.response.text()).to.include('EntityType'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Maestros",
+          "description": "Consultas de datos maestros usadas por la plataforma.",
+          "item": [
+            {
+              "name": "Cliente por código",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/BusinessPartners('{{card_code}}')?$select=CardCode,CardName,FederalTaxID,EmailAddress,SalesPersonCode,CreditLimit,CurrentAccountBalance,BPAddresses",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "BusinessPartners('{{card_code}}')"
+                  ],
+                  "query": [
+                    {
+                      "key": "$select",
+                      "value": "CardCode,CardName,FederalTaxID,EmailAddress,SalesPersonCode,CreditLimit,CurrentAccountBalance,BPAddresses"
+                    }
+                  ]
+                },
+                "description": "Cliente con direcciones, correo, cupo y vendedor dueño."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Tiene CardCode', () => pm.expect(pm.response.json().CardCode).to.eql(pm.collectionVariables.get('card_code') || pm.environment.get('card_code')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Buscar clientes por nombre",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/BusinessPartners?$filter=contains(CardName,'CONSTRUCTORA') and CardType eq 'cCustomer'&$select=CardCode,CardName,SalesPersonCode&$top=20",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "BusinessPartners"
+                  ],
+                  "query": [
+                    {
+                      "key": "$filter",
+                      "value": "contains(CardName,'CONSTRUCTORA') and CardType eq 'cCustomer'"
+                    },
+                    {
+                      "key": "$select",
+                      "value": "CardCode,CardName,SalesPersonCode"
+                    },
+                    {
+                      "key": "$top",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Buscador de clientes (contains)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Devuelve lista value', () => pm.expect(pm.response.json().value).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Proveedor por código",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/BusinessPartners?$select=CardCode&$filter=CardCode eq '{{supplier_code}}'",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "BusinessPartners"
+                  ],
+                  "query": [
+                    {
+                      "key": "$select",
+                      "value": "CardCode"
+                    },
+                    {
+                      "key": "$filter",
+                      "value": "CardCode eq '{{supplier_code}}'"
+                    }
+                  ]
+                },
+                "description": "Validación del proveedor de una solicitud de código."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Vendedor (SalesPersons)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/SalesPersons({{slp_code}})",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "SalesPersons({{slp_code}})"
+                  ]
+                },
+                "description": "Nombre del vendedor."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Condición de pago",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/PaymentTermsTypes(1)",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "PaymentTermsTypes(1)"
+                  ]
+                },
+                "description": "Condición de pago del cliente."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Artículos por código",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Items?$select=ItemCode,ItemName,U_NX_PrecioMinVta,U_Origin&$filter=ItemCode eq '{{item_code}}'",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Items"
+                  ],
+                  "query": [
+                    {
+                      "key": "$select",
+                      "value": "ItemCode,ItemName,U_NX_PrecioMinVta,U_Origin"
+                    },
+                    {
+                      "key": "$filter",
+                      "value": "ItemCode eq '{{item_code}}'"
+                    }
+                  ]
+                },
+                "description": "Datos del artículo usados al convertir una cotización."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Bodegas",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Warehouses?$select=WarehouseCode,WarehouseName",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Warehouses"
+                  ],
+                  "query": [
+                    {
+                      "key": "$select",
+                      "value": "WarehouseCode,WarehouseName"
+                    }
+                  ]
+                },
+                "description": "Bodegas A01, A02, A08."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Solicitud de código de producto",
+          "description": "Creación del artículo en SAP.",
+          "item": [
+            {
+              "name": "Serie de artículos",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{sl_url}}/SeriesService_GetDocumentSeries",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "SeriesService_GetDocumentSeries"
+                  ]
+                },
+                "description": "Serie automática de artículos (prefijo F).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"DocumentTypeParams\": {\n    \"Document\": \"4\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Crear artículo",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{sl_url}}/Items",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Items"
+                  ]
+                },
+                "description": "Crea el artículo; SAP asigna el ItemCode por la serie.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ItemName\": \"TALADRO PERCUTOR INALAMBRICO 18V (PRUEBA)\",\n  \"ItemsGroupCode\": 105,\n  \"Manufacturer\": 1650,\n  \"Mainsupplier\": \"{{supplier_code}}\",\n  \"SupplierCatalogNo\": \"SKU-PRV-1000\",\n  \"SalesUnit\": \"UN\",\n  \"PurchaseUnit\": \"UN\",\n  \"InventoryUOM\": \"UN\",\n  \"SalesUnitLength\": 30,\n  \"SalesUnitWidth\": 20,\n  \"SalesUnitHeight\": 15,\n  \"SalesUnitWeight\": 2.5,\n  \"U_NX_PrecioMinVta\": 107131,\n  \"U_Origin\": \"Nacional\",\n  \"Series\": \"{{item_series}}\",\n  \"ItemPrices\": [\n    {\n      \"PriceList\": 1,\n      \"Price\": 178552\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                      "const j = pm.response.json();",
+                      "pm.test('SAP asignó ItemCode', () => pm.expect(j.ItemCode).to.match(/^F/));",
+                      "pm.collectionVariables.set('nuevo_item', j.ItemCode);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Registrar código del proveedor",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{sl_url}}/AlternateCatNum",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "AlternateCatNum"
+                  ]
+                },
+                "description": "Catálogo alternativo del proveedor para el artículo creado.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ItemCode\": \"{{nuevo_item}}\",\n  \"CardCode\": \"{{supplier_code}}\",\n  \"Substitute\": \"SKU-PRV-1000\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201, 204', () => pm.expect(pm.response.code).to.be.oneOf([201, 204]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Cotizaciones (Quotations)",
+          "description": "Ciclo completo de una oferta de venta.",
+          "item": [
+            {
+              "name": "Crear cotización",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{sl_url}}/Quotations",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Quotations"
+                  ]
+                },
+                "description": "Crea la oferta de venta.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"CardCode\": \"{{card_code}}\",\n  \"DocDate\": \"{{hoy}}\",\n  \"DocDueDate\": \"{{en_15_dias}}\",\n  \"SalesPersonCode\": \"{{slp_code}}\",\n  \"Comments\": \"Cotización de prueba (Postman)\",\n  \"DocumentLines\": [\n    {\n      \"ItemCode\": \"{{item_code}}\",\n      \"Quantity\": 3,\n      \"UnitPrice\": 89990,\n      \"U_GGH_TIM\": 5\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                      "const j = pm.response.json();",
+                      "pm.test('Entrega DocEntry y DocNum', () => { pm.expect(j.DocEntry).to.be.a('number'); pm.expect(j.DocNum).to.be.a('number'); });",
+                      "pm.collectionVariables.set('cot_entry', j.DocEntry);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Buscar cotizaciones del vendedor",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Quotations?$select=DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocumentStatus,Cancelled&$filter=SalesPersonCode eq {{slp_code}}&$orderby=DocEntry desc&$top=20&$skip=0&$count=true",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Quotations"
+                  ],
+                  "query": [
+                    {
+                      "key": "$select",
+                      "value": "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocumentStatus,Cancelled"
+                    },
+                    {
+                      "key": "$filter",
+                      "value": "SalesPersonCode eq {{slp_code}}"
+                    },
+                    {
+                      "key": "$orderby",
+                      "value": "DocEntry desc"
+                    },
+                    {
+                      "key": "$top",
+                      "value": "20"
+                    },
+                    {
+                      "key": "$skip",
+                      "value": "0"
+                    },
+                    {
+                      "key": "$count",
+                      "value": "true"
+                    }
+                  ]
+                },
+                "description": "Buscador con paginación y conteo."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Detalle de la cotización",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Quotations({{cot_entry}})",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Quotations({{cot_entry}})"
+                  ]
+                },
+                "description": "Cabecera completa."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Líneas de la cotización",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Quotations({{cot_entry}})/DocumentLines",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Quotations({{cot_entry}})",
+                    "DocumentLines"
+                  ]
+                },
+                "description": "Líneas para el PDF."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Editar cotización",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "B1S-ReplaceCollectionsOnPatch",
+                    "value": "true"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{sl_url}}/Quotations({{cot_entry}})",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Quotations({{cot_entry}})"
+                  ]
+                },
+                "description": "Reemplaza las líneas (B1S-ReplaceCollectionsOnPatch).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"Comments\": \"Cotización editada (Postman)\",\n  \"DocumentLines\": [\n    {\n      \"ItemCode\": \"{{item_code}}\",\n      \"Quantity\": 5,\n      \"UnitPrice\": 87990\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 204', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Cerrar cotización",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Quotations({{cot_entry}})/Close",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Quotations({{cot_entry}})",
+                    "Close"
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 204', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Reabrir cotización",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Quotations({{cot_entry}})/Reopen",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Quotations({{cot_entry}})",
+                    "Reopen"
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 204', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Cancelar cotización",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Quotations({{cot_entry}})/Cancel",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Quotations({{cot_entry}})",
+                    "Cancel"
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 204', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Órdenes de venta (Orders)",
+          "description": "Envío de la nota de venta autorizada.",
+          "item": [
+            {
+              "name": "Crear orden de venta",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{sl_url}}/Orders",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Orders"
+                  ]
+                },
+                "description": "Documento que la plataforma envía tras la autorización (con UDF).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"CardCode\": \"{{card_code}}\",\n  \"DocDate\": \"{{hoy}}\",\n  \"DocDueDate\": \"{{en_7_dias}}\",\n  \"SalesPersonCode\": \"{{slp_code}}\",\n  \"Comments\": \"Orden de prueba (Postman)\",\n  \"U_GGH_CCL\": \"compras@cliente.ejemplo.cl\",\n  \"U_NX_TipoOrden\": \"Entrega\",\n  \"U_INX_FolioRef_1\": \"OC-POSTMAN-001\",\n  \"U_GGH_TDS\": \"GGH\",\n  \"U_GGH_TPD\": \"Factura\",\n  \"U_GGH_FPG\": \"Crédito\",\n  \"U_GGH_FLE\": 0,\n  \"TransportationCode\": 1,\n  \"ShipToCode\": \"DESPACHO\",\n  \"DocumentLines\": [\n    {\n      \"ItemCode\": \"{{item_code}}\",\n      \"Quantity\": 2,\n      \"UnitPrice\": 89990,\n      \"WarehouseCode\": \"A01\",\n      \"TaxCode\": \"IVA\",\n      \"U_NX_PrecioMinVta\": 64280,\n      \"U_GGH_MPC\": 33.9,\n      \"U_GGH_COM\": 3.0,\n      \"U_GGH_SCP\": \"NO\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                      "const j = pm.response.json();",
+                      "pm.test('SAP entrega el número (DocNum)', () => pm.expect(j.DocNum).to.be.a('number'));",
+                      "pm.collectionVariables.set('ov_entry', j.DocEntry);",
+                      "pm.collectionVariables.set('ov_num', j.DocNum);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Error esperado: cliente bloqueado",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{sl_url}}/Orders",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Orders"
+                  ]
+                },
+                "description": "Caso negativo: SAP debe rechazar la orden de un cliente bloqueado.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"CardCode\": \"{{card_code_bloqueado}}\",\n  \"DocDueDate\": \"{{en_7_dias}}\",\n  \"DocumentLines\": [\n    {\n      \"ItemCode\": \"{{item_code}}\",\n      \"Quantity\": 1\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 400', () => pm.expect(pm.response.code).to.be.oneOf([400]));",
+                      "pm.test('Error con formato SAP', () => pm.expect(pm.response.json().error.code).to.exist);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Buscar orden por número",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Orders?$filter=DocNum eq {{ov_num}}&$select=DocEntry,DocNum,DocumentStatus,SalesPersonCode,DocTotal",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Orders"
+                  ],
+                  "query": [
+                    {
+                      "key": "$filter",
+                      "value": "DocNum eq {{ov_num}}"
+                    },
+                    {
+                      "key": "$select",
+                      "value": "DocEntry,DocNum,DocumentStatus,SalesPersonCode,DocTotal"
+                    }
+                  ]
+                },
+                "description": "Detalle y trazabilidad por DocNum."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Historial del vendedor",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Orders?$filter=SalesPersonCode eq {{slp_code}} and DocDate ge '{{hace_30_dias}}'&$select=DocEntry,DocNum,CardName,DocDate,DocTotal,DocumentStatus&$orderby=DocDate desc",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Orders"
+                  ],
+                  "query": [
+                    {
+                      "key": "$filter",
+                      "value": "SalesPersonCode eq {{slp_code}} and DocDate ge '{{hace_30_dias}}'"
+                    },
+                    {
+                      "key": "$select",
+                      "value": "DocEntry,DocNum,CardName,DocDate,DocTotal,DocumentStatus"
+                    },
+                    {
+                      "key": "$orderby",
+                      "value": "DocDate desc"
+                    }
+                  ]
+                },
+                "description": "Órdenes del vendedor en un rango."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Actualizar comentario de la orden",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{sl_url}}/Orders({{ov_entry}})",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Orders({{ov_entry}})"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"Comments\": \"Actualizada desde Postman\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 204', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Solicitud de compra enlazada",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{sl_url}}/PurchaseRequests",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "PurchaseRequests"
+                  ]
+                },
+                "description": "Compra de una línea sin stock, enlazada a la orden (BaseType 17).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"RequriedDate\": \"{{en_7_dias}}\",\n  \"Comments\": \"OV {{ov_num}}\",\n  \"DocumentLines\": [\n    {\n      \"ItemCode\": \"{{item_code}}\",\n      \"Quantity\": 2,\n      \"LineVendor\": \"{{supplier_code}}\",\n      \"BaseType\": 17,\n      \"BaseEntry\": \"{{ov_entry}}\",\n      \"BaseLine\": 0\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.expect(pm.response.code).to.be.oneOf([201]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Cerrar orden",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/Orders({{ov_entry}})/Close",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "Orders({{ov_entry}})",
+                    "Close"
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 204', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Trazabilidad",
+          "description": "Seguimiento de la orden en SAP.",
+          "item": [
+            {
+              "name": "Solicitudes de compra de la orden",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/PurchaseRequests?$filter=contains(Comments,'{{ov_num}}')&$select=DocEntry,DocNum,DocumentStatus,Comments",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "PurchaseRequests"
+                  ],
+                  "query": [
+                    {
+                      "key": "$filter",
+                      "value": "contains(Comments,'{{ov_num}}')"
+                    },
+                    {
+                      "key": "$select",
+                      "value": "DocEntry,DocNum,DocumentStatus,Comments"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Orden de compra por número",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/PurchaseOrders?$filter=DocNum eq {{oc_num}}&$select=DocEntry,DocNum,DocumentStatus,DocumentLines",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "PurchaseOrders"
+                  ],
+                  "query": [
+                    {
+                      "key": "$filter",
+                      "value": "DocNum eq {{oc_num}}"
+                    },
+                    {
+                      "key": "$select",
+                      "value": "DocEntry,DocNum,DocumentStatus,DocumentLines"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Guías de despacho de la orden ($crossjoin)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{sl_url}}/$crossjoin(DeliveryNotes,DeliveryNotes/DocumentLines)?$expand=DeliveryNotes($select=DocEntry,DocNum,FolioNumber,DocDate)&$filter=DeliveryNotes/DocEntry eq DeliveryNotes/DocumentLines/DocEntry and DeliveryNotes/DocumentLines/BaseType eq 17 and DeliveryNotes/DocumentLines/BaseEntry eq {{ov_entry}}",
+                  "host": [
+                    "{{sl_url}}"
+                  ],
+                  "path": [
+                    "$crossjoin(DeliveryNotes,DeliveryNotes",
+                    "DocumentLines)"
+                  ],
+                  "query": [
+                    {
+                      "key": "$expand",
+                      "value": "DeliveryNotes($select=DocEntry,DocNum,FolioNumber,DocDate)"
+                    },
+                    {
+                      "key": "$filter",
+                      "value": "DeliveryNotes/DocEntry eq DeliveryNotes/DocumentLines/DocEntry and DeliveryNotes/DocumentLines/BaseType eq 17 and DeliveryNotes/DocumentLines/BaseEntry eq {{ov_entry}}"
+                    }
+                  ]
+                },
+                "description": "Guías cuyas líneas vienen de la orden (BaseType 17)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "99 Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{sl_url}}/Logout",
+              "host": [
+                "{{sl_url}}"
+              ],
+              "path": [
+                "Logout"
+              ]
+            },
+            "description": "Cierra la sesión."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 204, 200', () => pm.expect(pm.response.code).to.be.oneOf([204, 200]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "API de consultas (api2 · FastAPI + HANA)",
+      "description": "Consultas de solo lectura. La firma HMAC se calcula automáticamente en cada petición (pre-request de esta carpeta). Entorno: 'API de consultas'.",
+      "item": [
+        {
+          "name": "Salud",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_root}}/health",
+              "host": [
+                "{{api_root}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Sin autenticación."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "pm.test('ok', () => pm.expect(pm.response.json().ok).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Productos y stock",
+          "description": "",
+          "item": [
+            {
+              "name": "Buscar productos",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/productos?q=taladro&con_stock=true&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "productos"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "taladro"
+                    },
+                    {
+                      "key": "con_stock",
+                      "value": "true"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Devuelve una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Detalle de producto por bodega",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/productos/{{item_code}}?empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "productos",
+                    "{{item_code}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Devuelve una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Inventario por texto",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/public/items/inventario?q=taladro&limit=50&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "public",
+                    "items",
+                    "inventario"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "taladro"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "50"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": "Columnas que usa la nota de venta: A01/A02/A08, comprometido, stock crítico, PMV."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Devuelve una lista', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                      "pm.test('Trae stock por bodega', () => { const r = pm.response.json(); if (r.length) pm.expect(r[0]).to.have.property('A01'); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Inventario por códigos (pegado desde Excel)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/public/items/inventario?codigos={{item_code}},F040102,F040103&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "public",
+                    "items",
+                    "inventario"
+                  ],
+                  "query": [
+                    {
+                      "key": "codigos",
+                      "value": "{{item_code}},F040102,F040103"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Devuelve una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Fabricantes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/fabricantes?q=BOSCH&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "fabricantes"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "BOSCH"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Clientes",
+          "description": "",
+          "item": [
+            {
+              "name": "Listar clientes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/socios?q=constructora&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "socios"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "constructora"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Devuelve una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Ficha y crédito del cliente",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/socios/{{card_code}}?empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "socios",
+                    "{{card_code}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Trae socio y direcciones', () => { const j = pm.response.json(); pm.expect(j).to.have.property('socio'); pm.expect(j).to.have.property('direcciones'); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Órdenes abiertas",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/ventas/ov_abiertas?cardcode={{card_code}}&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "ventas",
+                    "ov_abiertas"
+                  ],
+                  "query": [
+                    {
+                      "key": "cardcode",
+                      "value": "{{card_code}}"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Órdenes pendientes de entrega",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/ventas/ov_pendientes_entrega?cardcode={{card_code}}&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "ventas",
+                    "ov_pendientes_entrega"
+                  ],
+                  "query": [
+                    {
+                      "key": "cardcode",
+                      "value": "{{card_code}}"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Guías pendientes de facturar",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/ventas/guias_pendientes_facturar?cardcode={{card_code}}&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "ventas",
+                    "guias_pendientes_facturar"
+                  ],
+                  "query": [
+                    {
+                      "key": "cardcode",
+                      "value": "{{card_code}}"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Facturas vencidas",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/ventas/facturas_vencidas?cardcode={{card_code}}&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "ventas",
+                    "facturas_vencidas"
+                  ],
+                  "query": [
+                    {
+                      "key": "cardcode",
+                      "value": "{{card_code}}"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Compras, comisiones y posventa",
+          "description": "",
+          "item": [
+            {
+              "name": "Buscar proveedores",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/public/proveedores/buscar?q=distribuidora&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "public",
+                    "proveedores",
+                    "buscar"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "distribuidora"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Devuelve una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Comisiones del vendedor",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/comisiones?slpcode={{slp_code}}&empresa={{schema}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "comisiones"
+                  ],
+                  "query": [
+                    {
+                      "key": "slpcode",
+                      "value": "{{slp_code}}"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Devuelve una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Posventa: buscar guías de despacho",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/buscar/guias?q=constructora&empresa={{schema}}&slpcode={{slp_code}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "buscar",
+                    "guias"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "constructora"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    },
+                    {
+                      "key": "slpcode",
+                      "value": "{{slp_code}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "pm.test('Trae documentos', () => pm.expect(pm.response.json().documentos).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Posventa: buscar facturas de reserva",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/buscar/facturas_reserva?q=constructora&empresa={{schema}}&slpcode={{slp_code}}",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "buscar",
+                    "facturas_reserva"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "constructora"
+                    },
+                    {
+                      "key": "empresa",
+                      "value": "{{schema}}"
+                    },
+                    {
+                      "key": "slpcode",
+                      "value": "{{slp_code}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Seguridad (casos negativos)",
+          "description": "",
+          "item": [
+            {
+              "name": "Empresa no permitida → 400",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{api_url}}/productos?empresa=SBO_OTRA",
+                  "host": [
+                    "{{api_url}}"
+                  ],
+                  "path": [
+                    "productos"
+                  ],
+                  "query": [
+                    {
+                      "key": "empresa",
+                      "value": "SBO_OTRA"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 400', () => pm.expect(pm.response.code).to.be.oneOf([400]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Firma HMAC-SHA256 v2 de la API de consultas (api2/app/firma.py):",
+              "//   HMAC(secret, '<KeyId>.<Timestamp>.<METODO>.<ruta>?<query ordenada>')",
+              "// La query se ordena por (clave, valor) y se codifica como urlencode de Python.",
+              "const keyId = pm.environment.get('api_key_id');",
+              "const secret = pm.environment.get('api_key_secret');",
+              "const ts = Math.floor(Date.now() / 1000).toString();",
+              "const cod = s => encodeURIComponent(s).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase()).replace(/%20/g, '+');",
+              "const dec = s => { try { return decodeURIComponent(String(s).replace(/\\+/g, ' ')); } catch (e) { return String(s); } };",
+              "const url = pm.variables.replaceIn(pm.request.url.toString());",
+              "const ruta = url.replace(/^[a-z]+:\\/\\/[^\\/]+/i, '').split('?')[0];",
+              "const pares = pm.request.url.query.all().filter(p => !p.disabled && p.key)",
+              "  .map(p => [dec(pm.variables.replaceIn(p.key)), dec(pm.variables.replaceIn(p.value == null ? '' : p.value))])",
+              "  .sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));",
+              "const query = pares.map(([k, v]) => cod(k) + '=' + cod(v)).join('&');",
+              "const mensaje = [keyId, ts, pm.request.method.toUpperCase(), ruta + '?' + query].join('.');",
+              "const firma = CryptoJS.HmacSHA256(mensaje, secret).toString(CryptoJS.enc.Hex);",
+              "pm.request.headers.upsert({ key: 'X-API-KeyId', value: keyId });",
+              "pm.request.headers.upsert({ key: 'X-API-Timestamp', value: ts });",
+              "pm.request.headers.upsert({ key: 'X-API-Signature', value: firma });",
+              "pm.request.headers.upsert({ key: 'X-API-Signature-Version', value: '2' });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "API de consultas · sin firma",
+      "description": "Debe rechazarse con 401.",
+      "item": [
+        {
+          "name": "Sin cabeceras HMAC → 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_url}}/productos?q=taladro",
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "productos"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "taladro"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.expect(pm.response.code).to.be.oneOf([401]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Fechas relativas para los documentos de prueba",
+          "const d = (dias) => { const f = new Date(); f.setDate(f.getDate() + dias); return f.toISOString().slice(0, 10); };",
+          "pm.collectionVariables.set('hoy', d(0));",
+          "pm.collectionVariables.set('en_7_dias', d(7));",
+          "pm.collectionVariables.set('en_15_dias', d(15));",
+          "pm.collectionVariables.set('hace_30_dias', d(-30));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "session_id",
+      "value": ""
+    },
+    {
+      "key": "nuevo_item",
+      "value": ""
+    },
+    {
+      "key": "cot_entry",
+      "value": ""
+    },
+    {
+      "key": "ov_entry",
+      "value": ""
+    },
+    {
+      "key": "ov_num",
+      "value": ""
+    },
+    {
+      "key": "oc_num",
+      "value": ""
+    },
+    {
+      "key": "hoy",
+      "value": ""
+    },
+    {
+      "key": "en_7_dias",
+      "value": ""
+    },
+    {
+      "key": "en_15_dias",
+      "value": ""
+    },
+    {
+      "key": "hace_30_dias",
+      "value": ""
+    }
+  ]
+}

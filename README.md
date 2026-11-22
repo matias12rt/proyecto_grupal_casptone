@@ -7,7 +7,7 @@ Profesor guía: Álvaro Mellado.
 **Organización:** Grupo Gómez Hermanos.
 
 Este repositorio reúne la **documentación y las evidencias** del proyecto. El código fuente de la
-plataforma está en el repositorio `Proy-Capstone`.
+plataforma está en el repositorio [`Proy-Capstone`](https://github.com/matias12rt/Proy-Capstone).
 
 ## El proyecto
 
@@ -104,8 +104,18 @@ de accesos · Manual técnico · Colección Postman-Bruno (carpeta `Coleccion Po
 
 ## Tecnologías
 
-Python 3.12 · Django 5.2 · FastAPI · SAP Business One Service Layer · SAP HANA · PostgreSQL ·
-Bootstrap 5 · Docker · Mailpit (correo de demostración) · Cloudflare Tunnel y Cloudflare Access con
-Microsoft Entra ID (acceso remoto) · Windows Server 2016.
+| Capa | Tecnologías |
+|---|---|
+| Lenguajes | Python 3.12 · JavaScript · HTML y CSS · SQL |
+| Frameworks | Django 5.2 (plataforma) · FastAPI + Uvicorn (API de consultas de solo lectura) · Bootstrap 5.3 |
+| ERP | SAP Business One: Service Layer (escritura) y SAP HANA (lectura, solo consulta) |
+| Base de datos | PostgreSQL 16 (contenedores y producción) · SQLite (desarrollo y pruebas) |
+| DevOps | Docker y Docker Compose · Nginx (proxy inverso) · gunicorn · WhiteNoise |
+| Correo | Microsoft 365 (producción) · Mailpit (demostración) |
+| Acceso remoto | Cloudflare Tunnel y Cloudflare Access con Microsoft Entra ID |
+| Pruebas | unittest (Django Test Framework) · FastAPI TestClient · Postman y Bruno (colección de la API) |
+| Documentos | WeasyPrint y xhtml2pdf (PDF) · openpyxl (Excel) |
+| Versionado | Git y GitHub (ramas `main`, `develop` y `feature/HU-xxx`, Pull Requests) |
+| Servidor | Windows Server 2016 (on-premise) |
 
 > Todos los datos de ejemplo, capturas y usuarios de demostración son ficticios.
