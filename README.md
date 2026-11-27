@@ -59,13 +59,21 @@ tablas SAP - Service Layer y API**.
 ## Metodología
 
 Scrum, con 6 sprints entre el 31-08-2026 y el 13-11-2026: los Sprints 1 a 5 de dos semanas y el
-Sprint 6 (09-11-2026 al 13-11-2026) de una semana. Las necesidades surgidas en la operación
-(HU-021 a HU-035, 15 historias y 51 SP) se incorporaron al Product Backlog como alcance emergente
-por refinamiento (decisión D-14), sin extender los Sprints 5 y 6: el Sprint 5 cerró con 10
-historias (47 SP) y el Sprint 6 con 9 historias (36 SP). Junto con ellas se registraron las
-decisiones de integridad y seguridad comercial (D-15), correo y documentos (D-16), infraestructura y
-licencias (D-17) y catálogo de consultas de solo lectura (D-18). El proyecto cierra con 35 historias
-y 196 SP terminados y aceptados por el Product Owner, 123 casos de prueba aprobados (CP-001 a
+Sprint 6 (09-11-2026 al 13-11-2026) de una semana. La carga se repartió de forma pareja: 34, 37,
+37, 37, 34 y 17 SP por sprint (unos 35 SP por sprint de dos semanas). Las 43 historias forman un
+único Product Backlog, priorizado por valor para el negocio, riesgo y esfuerzo (MoSCoW) desde la
+planificación (decisión D-14): se comprometieron 35 historias (196 SP) en los 6 sprints, respetando
+las dependencias técnicas (primero usuarios, permisos e integración; luego solicitudes y consultas,
+ventas, posventa y trazabilidad; en los Sprints 5 y 6, las mejoras comerciales y consolas HU-021 a
+HU-035, que dependen de esos módulos), y 8 quedaron no priorizadas como trabajo futuro (HU-036 a
+HU-043, 84 SP; decisión D-19): facturación
+desde la plataforma, aplicación móvil nativa, reportería avanzada (BI), mesa de ayuda de TI,
+creación de clientes en SAP, devoluciones de dinero, avisos por WhatsApp o SMS y seguimiento de
+despachos con transportistas. Durante el proyecto se registraron además las decisiones de
+integridad y seguridad comercial (D-15), correo y documentos (D-16), infraestructura y licencias
+(D-17) y catálogo de consultas de solo lectura (D-18). El Product Backlog queda con 43 historias
+(280 SP), y el proyecto cierra con 35 historias y 196 SP terminados y aceptados por el Product
+Owner, 123 casos de prueba aprobados (CP-001 a
 CP-123) y la versión final v0.6.0 del producto (1.951 pruebas automatizadas de la plataforma y 246
 de la API de consultas, sin fallas). Las responsabilidades de Product Owner, Scrum Master y
 responsable de integración rotan en cada sprint (ver el Acuerdo de trabajo Scrum).
@@ -100,7 +108,27 @@ de datos · Modelo de datos y arquitectura actualizados · Especificación de in
 Especificación final de integración con SAP Business One · Mapa de tablas SAP - Service Layer y API
 (tablas y campos de SAP que usa la plataforma y por qué vía) · Informe de seguridad, roles y control
 de accesos · Manual técnico · Colección Postman-Bruno (carpeta `Coleccion Postman-Bruno/`, con su
-`LEEME.md`).
+`LEEME.md`) · Despliegue Docker (carpeta `Despliegue Docker/`: `Dockerfile`, `docker-compose.yml`,
+plantillas `.env` y README de instalación).
+
+## Cómo levantar la plataforma
+
+La plataforma se levanta con Docker desde el repositorio de código
+[`Proy-Capstone`](https://github.com/matias12rt/Proy-Capstone), en modo SAP simulado y con datos
+ficticios de demostración:
+
+```bash
+git clone https://github.com/matias12rt/Proy-Capstone.git
+cd Proy-Capstone
+cp .env.docker.example .env.docker      # Windows: copy .env.docker.example .env.docker
+docker compose --env-file .env.docker up -d --build
+```
+
+Luego se abre **http://localhost:8080** (los correos de la demostración se ven en
+http://localhost:8025). Los archivos de despliegue (`Dockerfile`, `docker-compose.yml`,
+`.env.example`, `.env.docker.example` y la configuración de Nginx) están también en
+`Fase_2/Evidencias Proyecto/Despliegue Docker/`, con su README paso a paso, los servicios y los
+comandos útiles.
 
 ## Tecnologías
 
